@@ -10,15 +10,15 @@ openssl rand -base64 32  # PostgreSQL password
 # 2. Create values file
 cat > my-values.yaml <<EOF
 global:
-  domain: webhooks.run
+  domain: example.com
 
 config:
   github:
     clientId: "your-github-client-id"
     clientSecret: "your-github-client-secret"
   encryptionKey: "your-encryption-key"
-  serverUrl: "webhooks.run"
-  sshUrl: "webhooks.run:2222"
+  serverUrl: "example.com"
+  sshUrl: "example.com:2222"
 
 postgresql:
   auth:
@@ -36,8 +36,8 @@ kubectl get ingress -n portr
 
 ## Access
 
-- **Admin UI**: https://admin.webhooks.run
-- **Tunnel Endpoint**: *.webhooks.run
+- **Admin UI**: https://example.com
+- **Tunnel Endpoint**: *.example.com
 - **SSH Port**: 2222
 
 ## Client Setup
@@ -46,7 +46,7 @@ kubectl get ingress -n portr
 # Install client (see https://portr.dev/client/installation/)
 
 # Configure
-portr config set --server webhooks.run
+portr config set --server example.com
 
 # Create tunnel
 portr http 3000
@@ -146,8 +146,8 @@ kubectl get svc -n portr portr-tunnel -o wide
 ```
 ┌─────────────────────────────────────────┐
 │           Ingress (nginx)               │
-│  *.webhooks.run  │  admin.webhooks.run  │
-└────────┬─────────┴──────────────────────┘
+│    *.example.com  │  example.com        │
+└────────┬───────────┴─────────────────────┘
          │
     ┌────▼────────┐        ┌──────────────┐
     │   Tunnel    │        │    Admin     │
