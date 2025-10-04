@@ -11,19 +11,6 @@ Portr is an open-source tunneling solution developed by [Amal Shaji](https://git
 - Documentation: https://portr.dev/docs
 - Website: https://portr.dev
 
-This Helm chart provides a production-ready deployment of Portr on Kubernetes clusters.
-
-## Features
-
-- **Production-ready deployment** with high availability options
-- **Automatic TLS/SSL** via cert-manager integration
-- **PostgreSQL** for persistent storage
-- **GitHub OAuth** authentication support
-- **Traffic inspection** dashboard
-- **LoadBalancer** or **Ingress** support
-- **Comprehensive monitoring** with health checks
-- **Security hardening** with Pod Security Standards
-
 ## Architecture
 
 Portr consists of three main components:
@@ -50,7 +37,6 @@ Portr consists of three main components:
 - Helm 3.0+
 - cert-manager (for automatic TLS certificates)
 - Ingress controller (nginx recommended)
-- LoadBalancer support (MetalLB, cloud provider, etc.)
 
 ## Installation
 
