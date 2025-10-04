@@ -1,0 +1,18 @@
+{{- if and .Values.tunnel.enabled .Values.tunnel.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "portr.fullname" . }}-tunnel
+  labels:
+    {{- include "portr.tunnel.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.tunnel.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.tunnel.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.tunnel.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.tunnel.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "portr.tunnel.selectorLabels" . | nindent 6 }}
+{{- end }}

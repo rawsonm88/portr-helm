@@ -1,0 +1,125 @@
+{{- if .Values.tunnel.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "portr.fullname" . }}-tunnel
+  labels:
+    {{- include "portr.tunnel.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.tunnel.autoscaling.enabled }}
+  replicas: {{ .Values.tunnel.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "portr.tunnel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "portr.tunnel.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "portr.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.tunnel.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        # Wait for admin service to be ready
+        - name: wait-for-admin
+          image: busybox:1.36
+          command:
+            - 'sh'
+            - '-c'
+            - |
+              until nc -z {{ include "portr.admin.serviceName" . }} {{ .Values.admin.service.port }}; do
+                echo "Waiting for Admin service to be ready..."
+                sleep 2
+              done
+              echo "Admin service is ready!"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            limits:
+              cpu: 100m
+              memory: 32Mi
+            requests:
+              cpu: 10m
+              memory: 16Mi
+      containers:
+        - name: tunnel
+          image: "{{ .Values.tunnel.image.repository }}:{{ .Values.tunnel.image.tag }}"
+          imagePullPolicy: {{ .Values.tunnel.image.pullPolicy }}
+          args: ["start"]
+          securityContext:
+            {{- toYaml .Values.tunnel.securityContext | nindent 12 }}
+          env:
+            # Configuration from ConfigMap
+            - name: PORTR_DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "portr.fullname" . }}-config
+                  key: PORTR_DOMAIN
+            - name: PORTR_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "portr.fullname" . }}-config
+                  key: PORTR_SERVER_URL
+            - name: PORTR_SSH_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "portr.fullname" . }}-config
+                  key: PORTR_SSH_URL
+            # Sensitive configuration from Secret
+            - name: PORTR_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "portr.fullname" . }}-secret
+                  key: PORTR_DB_URL
+          ports:
+            - name: upstream
+              containerPort: {{ .Values.tunnel.service.upstreamTargetPort }}
+              protocol: TCP
+            - name: ssh
+              containerPort: {{ .Values.tunnel.service.sshTargetPort }}
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.tunnel.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.tunnel.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.tunnel.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.tunnel.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tunnel.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tunnel.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

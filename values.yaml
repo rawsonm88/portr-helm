@@ -1,0 +1,400 @@
+# Default values for portr
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# ============================================================================
+# PORTR ARCHITECTURE OVERVIEW
+# ============================================================================
+#
+# Portr consists of three main components:
+#
+# 1. ADMIN SERVICE (Python/JavaScript Dashboard)
+#    - Runs on the root domain
+#    - Provides web UI for team management and traffic inspection
+#    - Exposes API on port 8000 for client connections
+#    - Requires PostgreSQL for storing tunnel metadata
+#    - Supports GitHub OAuth for authentication
+#
+# 2. TUNNEL SERVICE (Go-based Tunneling Server)
+#    - Handles all tunnel traffic routing
+#    - Listens on TWO ports only:
+#      * Port 8001: HTTP/HTTPS proxy server (receives traffic from ingress)
+#      * Port 2222: SSH server (for client connections)
+#    - Does NOT listen on ports 80/443 (nginx ingress handles TLS termination)
+#    - Routes traffic to connected clients based on subdomain
+#
+# 3. POSTGRESQL DATABASE
+#    - Stores tunnel configurations, user data, and request logs
+#    - Required by both admin and tunnel services
+#
+# TRAFFIC FLOW:
+#   Browser → https://subdomain.yourdomain.com
+#   → nginx ingress (TLS termination, routes to port 8001)
+#   → Tunnel service on port 8001
+#   → Client connected via SSH on port 2222
+#   → Local service (e.g., localhost:3000)
+#
+# DOMAIN CONFIGURATION:
+#   - Admin portal: yourdomain.com (root domain)
+#   - Tunnels: *.yourdomain.com (wildcard subdomains)
+#
+# ============================================================================
+
+# Global configuration
+global:
+  # Domain configuration for portr (e.g., example.com)
+  domain: example.com
+  # Ingress class to use
+  ingressClassName: nginx
+
+# Admin service configuration
+admin:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: amalshaji/portr-admin
+    pullPolicy: IfNotPresent
+    tag: "0.0.43-beta"
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    annotations: {}
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    hosts:
+      - host: example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: portr-admin-tls
+        hosts:
+          - example.com
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  # Autoscaling configuration
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  # Health check probes
+  livenessProbe:
+    httpGet:
+      path: /api/v1/healthcheck
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /api/v1/healthcheck
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    capabilities:
+      drop:
+        - ALL
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                    - admin
+            topologyKey: kubernetes.io/hostname
+
+# Tunnel service configuration
+tunnel:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: amalshaji/portr-tunnel
+    pullPolicy: IfNotPresent
+    tag: "0.0.43-beta"
+
+  # Service configuration
+  service:
+    type: LoadBalancer
+    # HTTP port
+    httpPort: 80
+    httpTargetPort: 80
+    # HTTPS port
+    httpsPort: 443
+    httpsTargetPort: 443
+    # Upstream port for client connections
+    upstreamPort: 8001
+    upstreamTargetPort: 8001
+    # SSH port for tunneling
+    sshPort: 2222
+    sshTargetPort: 2222
+    # TCP tunnel port range (for future use)
+    tcpPortRangeStart: 30001
+    tcpPortRangeEnd: 30100
+    annotations:
+      # MetalLB annotations (adjust as needed)
+      metallb.universe.tf/allow-shared-ip: portr-tunnel
+
+  # Ingress configuration for wildcard subdomain
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    hosts:
+      - host: "*.example.com"
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: portr-tunnel-wildcard-tls
+        hosts:
+          - "*.example.com"
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # Autoscaling - disabled by default for tunnel server
+  # Only enable if you understand the implications for tunnel persistence
+  autoscaling:
+    enabled: false
+
+  # Health check probes
+  livenessProbe:
+    tcpSocket:
+      port: 2222
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    tcpSocket:
+      port: 2222
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    capabilities:
+      drop:
+        - ALL
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules
+  affinity: {}
+
+# PostgreSQL database configuration
+postgresql:
+  enabled: true
+
+  image:
+    repository: postgres
+    pullPolicy: IfNotPresent
+    tag: "16.2"
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
+
+  # Database configuration
+  auth:
+    username: postgres
+    password: changeme
+    database: postgres
+
+  # Persistence configuration
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+  # Health check probes
+  livenessProbe:
+    exec:
+      command:
+        - /bin/sh
+        - -c
+        - exec pg_isready -U postgres -h 127.0.0.1 -p 5432
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+
+  readinessProbe:
+    exec:
+      command:
+        - /bin/sh
+        - -c
+        - exec pg_isready -U postgres -h 127.0.0.1 -p 5432
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 999
+    capabilities:
+      drop:
+        - ALL
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules
+  affinity: {}
+
+# Portr application configuration
+config:
+  # GitHub OAuth configuration for admin authentication
+  github:
+    clientId: ""
+    clientSecret: ""
+
+  # Server URL configuration (API endpoint for client connections)
+  serverUrl: "example.com"
+
+  # SSH URL configuration (for client connections)
+  sshUrl: "example.com:2222"
+
+  # Admin encryption key (generate a secure random key)
+  # openssl rand -hex 32
+  encryptionKey: ""
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Image pull secrets
+imagePullSecrets: []
+
+# Override the chart name
+nameOverride: ""
+fullnameOverride: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod labels
+podLabels: {}

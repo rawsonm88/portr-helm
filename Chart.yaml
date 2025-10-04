@@ -1,0 +1,21 @@
+apiVersion: v2
+name: portr
+description: A production-ready Helm chart for Portr - self-hosted ngrok alternative with traffic inspection
+type: application
+version: 1.0.0
+appVersion: "0.0.43-beta"
+keywords:
+  - tunnel
+  - ngrok
+  - proxy
+  - http
+  - tcp
+  - websocket
+  - self-hosted
+home: https://portr.dev
+sources:
+  - https://github.com/amalshaji/portr
+maintainers:
+  - name: portr-helm-maintainer
+    email: admin@example.com
+icon: https://portr.dev/favicon.ico

@@ -1,0 +1,18 @@
+{{- if and .Values.admin.enabled .Values.admin.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "portr.fullname" . }}-admin
+  labels:
+    {{- include "portr.admin.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.admin.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.admin.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.admin.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.admin.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "portr.admin.selectorLabels" . | nindent 6 }}
+{{- end }}

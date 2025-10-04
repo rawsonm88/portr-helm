@@ -1,0 +1,24 @@
+# Custom values files with sensitive data
+*-values.yaml
+my-values.yaml
+custom-values.yaml
+
+# Helm dependency charts
+charts/
+*.tgz
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+.*.tmp
+
+# Helm package files
+*.lock

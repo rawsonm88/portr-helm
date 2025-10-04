@@ -1,0 +1,25 @@
+{{- if .Values.tunnel.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "portr.tunnel.serviceName" . }}
+  labels:
+    {{- include "portr.tunnel.labels" . | nindent 4 }}
+  {{- with .Values.tunnel.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.tunnel.service.type }}
+  ports:
+    - port: {{ .Values.tunnel.service.upstreamPort }}
+      targetPort: {{ .Values.tunnel.service.upstreamTargetPort }}
+      protocol: TCP
+      name: upstream
+    - port: {{ .Values.tunnel.service.sshPort }}
+      targetPort: {{ .Values.tunnel.service.sshTargetPort }}
+      protocol: TCP
+      name: ssh
+  selector:
+    {{- include "portr.tunnel.selectorLabels" . | nindent 4 }}
+{{- end }}

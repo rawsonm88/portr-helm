@@ -1,0 +1,197 @@
+===============================================================================
+   ____            _
+  |  _ \ ___  _ __| |_ _ __
+  | |_) / _ \| '__| __| '__|
+  |  __/ (_) | |  | |_| |
+  |_|   \___/|_|   \__|_|
+
+  Self-hosted tunnel solution with traffic inspection
+===============================================================================
+
+Portr has been successfully deployed!
+
+DEPLOYMENT INFORMATION:
+-----------------------
+- Chart Version: {{ .Chart.Version }}
+- App Version: {{ .Chart.AppVersion }}
+- Release Name: {{ .Release.Name }}
+- Namespace: {{ .Release.Namespace }}
+
+COMPONENTS DEPLOYED:
+--------------------
+{{- if .Values.admin.enabled }}
+✓ Admin Service ({{ .Values.admin.replicaCount }} replicas)
+{{- end }}
+{{- if .Values.tunnel.enabled }}
+✓ Tunnel Service ({{ .Values.tunnel.replicaCount }} replicas)
+{{- end }}
+{{- if .Values.postgresql.enabled }}
+✓ PostgreSQL Database (StatefulSet)
+{{- end }}
+
+ACCESS YOUR PORTR DEPLOYMENT:
+------------------------------
+{{- if .Values.admin.ingress.enabled }}
+
+1. Admin Dashboard:
+   {{- range .Values.admin.ingress.hosts }}
+   https://{{ .host }}
+   {{- end }}
+
+   The admin dashboard allows you to:
+   - Manage teams and users
+   - View active tunnels
+   - Inspect HTTP requests
+   - Control access permissions
+
+{{- else }}
+
+1. Admin Dashboard (Port-Forward):
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "portr.admin.serviceName" . }} 8000:{{ .Values.admin.service.port }}
+   Then access: http://localhost:8000
+
+{{- end }}
+
+{{- if .Values.tunnel.ingress.enabled }}
+
+2. Tunnel Endpoint:
+   Domain: {{ .Values.global.domain }}
+   Wildcard: *.{{ .Values.global.domain }}
+   SSH Port: {{ .Values.tunnel.service.sshPort }}
+
+{{- else }}
+
+2. Tunnel Service (LoadBalancer):
+   Get the LoadBalancer IP:
+   kubectl get svc -n {{ .Release.Namespace }} {{ include "portr.tunnel.serviceName" . }}
+
+{{- end }}
+
+CLIENT SETUP:
+-------------
+To use Portr, you need to install the client on your local machine:
+
+1. Install the Portr client:
+   Visit: https://portr.dev/client/installation/
+
+2. Configure client connection:
+   portr config set --server {{ .Values.config.serverUrl }}
+
+3. Create a tunnel:
+   # HTTP tunnel
+   portr http 3000
+
+   # TCP tunnel
+   portr tcp 5432
+
+   # WebSocket tunnel
+   portr ws 8080
+
+IMPORTANT CONFIGURATION STEPS:
+-------------------------------
+{{- if not .Values.config.encryptionKey }}
+
+⚠️  ENCRYPTION KEY NOT SET!
+   Generate and set an encryption key for production use:
+
+   openssl rand -hex 32
+
+   Then update your values.yaml:
+   config:
+     encryptionKey: "<generated-key>"
+
+{{- end }}
+
+{{- if not .Values.config.github.clientId }}
+
+⚠️  GITHUB OAUTH NOT CONFIGURED!
+   For team management and authentication, configure GitHub OAuth:
+
+   1. Create GitHub OAuth App: https://github.com/settings/developers
+   2. Set Authorization callback URL: https://admin.{{ .Values.global.domain }}/api/v1/auth/github/callback
+   3. Update values.yaml with client ID and secret
+
+{{- end }}
+
+DATABASE CONNECTION:
+--------------------
+{{- if .Values.postgresql.enabled }}
+PostgreSQL is running as a StatefulSet in this namespace.
+
+Connection details:
+- Host: {{ include "portr.postgresql.serviceName" . }}
+- Port: {{ .Values.postgresql.service.port }}
+- Database: {{ .Values.postgresql.auth.database }}
+- Username: {{ .Values.postgresql.auth.username }}
+
+⚠️  Default password in use! Change it for production:
+   kubectl create secret generic {{ include "portr.fullname" . }}-secret \
+     --from-literal=POSTGRES_PASSWORD='<strong-password>' \
+     --dry-run=client -o yaml | kubectl apply -f -
+
+{{- end }}
+
+MONITORING AND LOGS:
+--------------------
+View logs for different components:
+
+# Admin service logs
+kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=admin -f
+
+# Tunnel service logs
+kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=tunnel -f
+
+# PostgreSQL logs
+kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=postgresql -f
+
+SCALING:
+--------
+{{- if .Values.admin.autoscaling.enabled }}
+Admin service has HPA enabled:
+- Min replicas: {{ .Values.admin.autoscaling.minReplicas }}
+- Max replicas: {{ .Values.admin.autoscaling.maxReplicas }}
+{{- else }}
+Scale admin service manually:
+kubectl scale deployment -n {{ .Release.Namespace }} {{ include "portr.fullname" . }}-admin --replicas=<count>
+{{- end }}
+
+⚠️  Note: Tunnel service should typically run with 1 replica to maintain connection state.
+
+TROUBLESHOOTING:
+----------------
+1. Check pod status:
+   kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+2. Check services:
+   kubectl get svc -n {{ .Release.Namespace }}
+
+3. Check ingress:
+   kubectl get ingress -n {{ .Release.Namespace }}
+
+4. Verify cert-manager certificates:
+   kubectl get certificate -n {{ .Release.Namespace }}
+
+SECURITY RECOMMENDATIONS:
+-------------------------
+1. Review and customize security contexts in values.yaml
+2. Enable Pod Security Standards in your namespace
+3. Implement NetworkPolicies for traffic isolation
+4. Rotate secrets regularly
+5. Use external secret management (e.g., External Secrets Operator)
+6. Enable audit logging for the admin service
+
+DOCUMENTATION:
+--------------
+- Portr Documentation: https://portr.dev/docs
+- GitHub Repository: https://github.com/amalshaji/portr
+- Helm Chart: {{ .Chart.Home }}
+
+SUPPORT:
+--------
+For issues and questions:
+- GitHub Issues: https://github.com/amalshaji/portr/issues
+- Documentation: https://portr.dev
+
+===============================================================================
+Thank you for using Portr!
+===============================================================================
