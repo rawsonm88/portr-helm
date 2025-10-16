@@ -1,6 +1,6 @@
 # Portr Helm Chart
 
-Production-ready Helm chart for deploying [Portr](https://github.com/amalshaji/portr) - a self-hosted ngrok alternative with traffic inspection.
+Helm chart for deploying [Portr](https://github.com/amalshaji/portr) - a self-hosted ngrok alternative with traffic inspection.
 
 ## About Portr
 
